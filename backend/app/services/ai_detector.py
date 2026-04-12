@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -7,14 +8,15 @@ GPTZERO_API_KEY = os.getenv("GPTZERO_API_KEY")
 
 def _mock_score(text: str) -> float:
     score = 0.5
+    text_lower = text.lower()
+
     ai_phrases = [
         "furthermore", "in conclusion", "it is worth noting",
         "it is important to", "in today's world", "delve into",
         "as an ai", "i cannot", "certainly!", "absolutely!",
         "in summary", "to summarize", "it is essential",
-        "it's worth noting", "i'd be happy to", "of course!",
+        "i'd be happy to", "of course!", "it's worth noting",
     ]
-    text_lower = text.lower()
     ai_hits = sum(1 for p in ai_phrases if p in text_lower)
     score += ai_hits * 0.07
 
@@ -26,7 +28,7 @@ def _mock_score(text: str) -> float:
         elif avg_len < 10:
             score -= 0.15
 
-    slang = ["lol", "tbh", "ngl", "gonna", "wanna", "idk", "omg", "wtf", "bruh", "lmao"]
+    slang = ["lol","tbh","ngl","gonna","wanna","idk","omg","wtf","bruh","lmao"]
     if any(s in text_lower for s in slang):
         score -= 0.25
 
@@ -44,7 +46,7 @@ async def detect_ai_content(text: str) -> dict:
             "human_probability": human_prob,
             "label":      "AI Generated" if is_ai else "Human Written",
             "confidence": "High" if ai_prob > 0.75 or ai_prob < 0.25 else "Medium",
-            "note":       "Smart mock detection — add GPTZero API key for real results",
+            "note":       "Heuristic detection — add GPTZero API key for ML results",
         }
 
     import httpx
@@ -56,8 +58,8 @@ async def detect_ai_content(text: str) -> dict:
         response = await client.post(url, json=payload, headers=headers)
         data     = response.json()
 
-    doc      = data.get("documents", [{}])[0]
-    ai_prob  = doc.get("average_generated_prob", 0)
+    doc     = data.get("documents", [{}])[0]
+    ai_prob = doc.get("average_generated_prob", 0)
 
     return {
         "is_ai_generated":   ai_prob > 0.5,

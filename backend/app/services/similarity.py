@@ -1,49 +1,28 @@
-_model = None
-
-def get_model():
-    global _model
-    if _model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            print("[Veritrace] Loading similarity model...")
-            _model = SentenceTransformer("all-MiniLM-L6-v2")
-            print("[Veritrace] Similarity model loaded.")
-        except Exception as e:
-            print(f"[Veritrace] Similarity model failed: {e}")
-            _model = "failed"
-    return _model if _model != "failed" else None
-
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 def compute_similarity(original_text: str, search_results: list) -> list:
     if not search_results:
         return []
 
-    model = get_model()
-
-    if model is None:
-        return [
-            {
-                "title":       r.get("title",   ""),
-                "link":        r.get("link",    ""),
-                "source":      r.get("source",  ""),
-                "snippet":     r.get("snippet", ""),
-                "similarity":  round(50 - i * 5, 1),
-                "date":        r.get("date",    "Unknown"),
-                "match_level": "Medium",
-            }
-            for i, r in enumerate(search_results)
-        ]
+    snippets = [r.get("snippet", "") for r in search_results if r.get("snippet")]
+    if not snippets:
+        return []
 
     try:
-        from sentence_transformers import util
-        original_embedding = model.encode(original_text, convert_to_tensor=True)
+        vectorizer = TfidfVectorizer(stop_words='english')
+        all_texts  = [original_text] + snippets
+        matrix     = vectorizer.fit_transform(all_texts)
+        scores     = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
+
         scored = []
+        snippet_index = 0
         for result in search_results:
             snippet = result.get("snippet", "")
             if not snippet:
                 continue
-            snippet_embedding = model.encode(snippet, convert_to_tensor=True)
-            score = util.cos_sim(original_embedding, snippet_embedding).item()
+            score = float(scores[snippet_index])
+            snippet_index += 1
             scored.append({
                 "title":       result.get("title",   ""),
                 "link":        result.get("link",    ""),
@@ -51,10 +30,12 @@ def compute_similarity(original_text: str, search_results: list) -> list:
                 "snippet":     snippet,
                 "similarity":  round(score * 100, 1),
                 "date":        result.get("date",    "Unknown"),
-                "match_level": "High" if score > 0.75 else "Medium" if score > 0.45 else "Low",
+                "match_level": "High" if score > 0.3 else "Medium" if score > 0.1 else "Low",
             })
+
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         return scored
+
     except Exception as e:
         print(f"[Veritrace] Similarity error: {e}")
         return []
