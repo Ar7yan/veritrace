@@ -1,6 +1,4 @@
 import re
-from app.services.reasoning import analyze_claim
-
 
 FAKE_SIGNALS = {
     "high": [
@@ -27,7 +25,6 @@ FAKE_SIGNALS = {
     ],
 }
 
-
 CREDIBILITY_SIGNALS = [
     "according to reuters", "according to ap", "according to the bbc",
     "study published in", "peer-reviewed", "researchers found",
@@ -38,96 +35,90 @@ CREDIBILITY_SIGNALS = [
     "according to experts", "scientists say",
 ]
 
-
 def analyze_fake_news(text: str, search_results: list = []) -> dict:
     text_lower = text.lower()
-    score = 20
-    reasons = []
+    score      = 20
+    reasons    = []
 
-    # -------------------------------
-    # 🔹 RULE-BASED ANALYSIS
-    # -------------------------------
     high_hits = [s for s in FAKE_SIGNALS["high"] if s in text_lower]
     if high_hits:
         score += len(high_hits) * 18
-        reasons.append(f"Strong misinformation language: {high_hits[0]}")
+        reasons.append(
+            f"Strong misinformation language detected: \"{high_hits[0]}\""
+            + (f" (+{len(high_hits)-1} more)" if len(high_hits) > 1 else "")
+        )
 
     med_hits = [s for s in FAKE_SIGNALS["medium"] if s in text_lower]
     if med_hits:
         score += len(med_hits) * 10
-        reasons.append(f"Sensational keywords: {', '.join(med_hits[:2])}")
+        reasons.append(f"Sensationalist keywords found: {', '.join(med_hits[:3])}")
 
-    words = text.split()
+    words      = text.split()
     caps_words = [w for w in words if w.isupper() and len(w) > 2]
     caps_ratio = len(caps_words) / max(len(words), 1)
-
-    if caps_ratio > 0.2:
+    if caps_ratio > 0.20:
         score += 20
-        reasons.append("Excessive capital letters")
+        reasons.append(f"Excessive capitalisation ({int(caps_ratio*100)}% of words)")
+    elif caps_ratio > 0.10:
+        score += 10
+        reasons.append("Elevated use of capital letters detected")
 
-    exclaim = text.count("!")
+    exclaim = text.count('!')
     if exclaim >= 3:
         score += 12
-        reasons.append("Too many exclamation marks")
+        reasons.append(f"Multiple exclamation marks ({exclaim}) indicate emotional manipulation")
+    elif exclaim == 2:
+        score += 6
 
-    # -------------------------------
-    # 🔹 HUGGINGFACE REASONING (KEY FIX)
-    # -------------------------------
-    try:
-        reasoning = analyze_claim(text)
-        print("🔥 REASONING:", reasoning)   # DEBUG
+    big_numbers = re.findall(r'\b\d+\s*%|\b\d+\s*(million|billion|trillion)\b', text_lower)
+    sourced     = any(w in text_lower for w in ["according to", "study", "report", "data", "survey"])
+    if big_numbers and not sourced:
+        score += 12
+        reasons.append(f"Contains {len(big_numbers)} statistical claim(s) with no cited source")
 
-        if reasoning["verdict"] == "suspicious":
-            boost = int(reasoning["confidence"] * 60)
-            score += boost
+    word_count = len(words)
+    if word_count < 25 and (high_hits or med_hits):
+        score += 15
+        reasons.append("Very short content making strong claims — lacks verifiable detail")
 
-            reasons.append(
-                f"AI detected suspicious/absurd claim ({int(reasoning['confidence']*100)}%)"
-            )
+    if text.count('?') >= 2 and word_count < 40:
+        score += 8
+        reasons.append("Rhetorical questions used to imply unverified claims")
 
-    except Exception as e:
-        print("❌ Reasoning failed:", e)
-        reasoning = {
-            "verdict": "unknown",
-            "confidence": 0.5,
-            "reason": "Reasoning unavailable"
-        }
+    cred_hits = [s for s in CREDIBILITY_SIGNALS if s in text_lower]
+    if cred_hits:
+        reduction = min(len(cred_hits) * 12, 40)
+        score    -= reduction
+        reasons.append(f"Credible sourcing language present: \"{cred_hits[0]}\"")
 
-    # -------------------------------
-    # 🔹 FINAL SCORING
-    # -------------------------------
-    score = max(2, min(96, round(score)))
+    neutral_words = ["data","research","study","report","analysis",
+                     "evidence","statistics","published","according to"]
+    neutral_hits  = [w for w in neutral_words if w in text_lower]
+    if len(neutral_hits) >= 3:
+        score -= 15
+        reasons.append(f"Neutral, evidence-based language detected ({', '.join(neutral_hits[:3])})")
+    elif len(neutral_hits) >= 1:
+        score -= 6
 
-    # 🔥 FORCE CORRECT VERDICT USING AI
-    if reasoning["verdict"] == "suspicious" and reasoning["confidence"] > 0.5:
-        verdict = "FAKE"
-    else:
-        if score >= 60:
-            verdict = "FAKE"
-        elif score <= 35:
-            verdict = "REAL"
-        else:
-            verdict = "UNCERTAIN"
+    if not high_hits and not med_hits and not caps_words:
+        score -= 10
+        reasons.append("No sensationalist language or misinformation patterns detected")
 
-    # -------------------------------
-    # 🔹 SOURCES MOCK
-    # -------------------------------
+    score   = max(2, min(96, round(score)))
+    verdict = "FAKE" if score >= 60 else "REAL" if score <= 35 else "UNCERTAIN"
+
     sources = [
-        {"name": "Reuters", "supports": verdict != "FAKE"},
-        {"name": "AP News", "supports": verdict != "FAKE"},
+        {"name": "Reuters",       "supports": verdict != "FAKE"},
+        {"name": "AP News",       "supports": verdict != "FAKE"},
         {"name": "FactCheck.org", "supports": verdict == "FAKE"},
     ]
 
     if not reasons:
-        reasons.append("No strong signals detected")
+        reasons.append("Content appears neutral with no strong indicators either way")
 
-    # -------------------------------
-    # 🔹 FINAL OUTPUT
-    # -------------------------------
     return {
         "verdict": verdict,
-        "score": score,
+        "score":   score,
         "reasons": reasons[:4],
         "sources": sources,
-        "reasoning": reasoning["reason"],   # 🔥 IMPORTANT FOR UI
     }
