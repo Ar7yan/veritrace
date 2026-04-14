@@ -1,44 +1,32 @@
-from transformers import pipeline
-
-# 🔥 Load model once (important)
-classifier = pipeline(
-    "zero-shot-classification",
-    model="valhalla/distilbart-mnli-12-1"   # 🔥 lighter + faster
-)
-
 def analyze_claim(text: str) -> dict:
-    """
-    Classify whether a claim is realistic or fake using HuggingFace
-    """
+    text_lower = text.lower()
 
-    labels = [
-        "realistic news",
-        "misinformation or fake news",
-        "conspiracy or absurd claim"
+    absurd_keywords = [
+        "aliens", "time travel", "mind control",
+        "quantum signals", "secretly controlling",
+        "conspiracy", "hidden forces"
     ]
 
-    try:
-        result = classifier(text, labels)
+    suspicious_patterns = [
+        "breaking", "shocking", "they don't want you to know",
+        "viral", "rumor", "unverified"
+    ]
 
-        top_label = result["labels"][0]
-        confidence = result["scores"][0]
+    absurd_score = sum(1 for w in absurd_keywords if w in text_lower)
+    suspicious_score = sum(1 for w in suspicious_patterns if w in text_lower)
 
-        if "conspiracy" in top_label or "fake" in top_label:
-            verdict = "suspicious"
-        else:
-            verdict = "realistic"
+    score = max(absurd_score * 0.4, suspicious_score * 0.3)
+    score = min(score, 1.0)
 
+    if score > 0.5:
         return {
-            "verdict": verdict,
-            "confidence": round(confidence, 3),
-            "reason": f"Classified as '{top_label}' ({round(confidence*100,1)}% confidence)"
+            "verdict": "suspicious",
+            "confidence": score,
+            "reason": "Contains unrealistic or conspiracy-like claim"
         }
 
-    except Exception as e:
-        print(f"[HF Error] {e}")
-
-        return {
-            "verdict": "unknown",
-            "confidence": 0.5,
-            "reason": "Could not analyze claim"
-        }
+    return {
+        "verdict": "realistic",
+        "confidence": 1 - score,
+        "reason": "No major misinformation patterns detected"
+    }
