@@ -29,7 +29,7 @@ async def search_propagation(text: str) -> dict:
         except Exception as e:
             print(f"[Veritrace] SerpAPI error: {e}")
 
-    # Fallback — generate contextual mock based on actual query
+    # Fallback
     return _contextual_mock(query, text)
 
 
@@ -57,7 +57,7 @@ async def _search_newsapi(query: str, original_text: str) -> dict:
     for article in articles:
         url_link = article.get("url", "")
         source   = article.get("source", {}).get("name", "")
-        title    = article.get("title",       "")
+        title    = article.get("title", "")
         desc     = article.get("description", "")
         date     = article.get("publishedAt", "")[:10] if article.get("publishedAt") else "Unknown"
 
@@ -100,12 +100,12 @@ async def _search_serpapi(query: str) -> dict:
 
     for item in organic:
         results.append({
-            "title":    item.get("title",          ""),
-            "link":     item.get("link",            ""),
-            "snippet":  item.get("snippet",         ""),
-            "source":   item.get("displayed_link",  "").split("/")[0],
-            "position": item.get("position",        0),
-            "date":     item.get("date",            "Unknown"),
+            "title":    item.get("title",         ""),
+            "link":     item.get("link",           ""),
+            "snippet":  item.get("snippet",        ""),
+            "source":   item.get("displayed_link", "").split("/")[0],
+            "position": item.get("position",       0),
+            "date":     item.get("date",           "Unknown"),
         })
 
     return {
@@ -116,53 +116,51 @@ async def _search_serpapi(query: str) -> dict:
 
 
 def _contextual_mock(query: str, text: str) -> dict:
-    """
-    Generates contextual mock results based on the actual query.
-    No hardcoded fake links — uses real news domains with query-based URLs.
-    """
-    words   = query.replace(" ", "-").lower()
-    sources = [
+    q = query.replace(' ', '+')
+    results = [
         {
-            "name": "Reuters",
-            "base": "https://www.reuters.com/search/news",
-            "param": f"?blob={query.replace(' ','+')}"
+            "title":    f"Reuters: Search results for '{query}'",
+            "link":     f"https://www.reuters.com/site-search/?query={q}",
+            "snippet":  f"Find the latest Reuters coverage on: {query}",
+            "source":   "reuters.com",
+            "position": 1,
+            "date":     "Live",
         },
         {
-            "name": "BBC News",
-            "base": "https://www.bbc.com/search",
-            "param": f"?q={query.replace(' ','+')}"
+            "title":    f"BBC News: '{query}'",
+            "link":     f"https://www.bbc.co.uk/search?q={q}",
+            "snippet":  f"BBC News coverage and analysis on: {query}",
+            "source":   "bbc.co.uk",
+            "position": 2,
+            "date":     "Live",
         },
         {
-            "name": "AP News",
-            "base": "https://apnews.com/search",
-            "param": f"?q={query.replace(' ','+')}"
+            "title":    f"AP News: '{query}'",
+            "link":     f"https://apnews.com/search?q={q}",
+            "snippet":  f"Associated Press reporting on: {query}",
+            "source":   "apnews.com",
+            "position": 3,
+            "date":     "Live",
         },
         {
-            "name": "The Guardian",
-            "base": "https://www.theguardian.com/search",
-            "param": f"?q={query.replace(' ','+')}"
+            "title":    f"The Guardian: '{query}'",
+            "link":     f"https://www.theguardian.com/search?q={q}",
+            "snippet":  f"Guardian journalism and opinion on: {query}",
+            "source":   "theguardian.com",
+            "position": 4,
+            "date":     "Live",
         },
         {
-            "name": "NPR",
-            "base": "https://www.npr.org/search",
-            "param": f"#storyContent&q={query.replace(' ','+')}"
+            "title":    f"NPR: '{query}'",
+            "link":     f"https://www.npr.org/search?query={q}",
+            "snippet":  f"NPR news and features on: {query}",
+            "source":   "npr.org",
+            "position": 5,
+            "date":     "Live",
         },
     ]
-
-    results = []
-    for i, s in enumerate(sources):
-        results.append({
-            "title":    f"{s['name']} — Search results for: {query}",
-            "link":     s["base"] + s["param"],
-            "snippet":  f"Search {s['name']} for the latest news and coverage about: {query}",
-            "source":   s["name"],
-            "position": i + 1,
-            "date":     "Live search",
-        })
-
     return {
         "query":       query,
         "results":     results,
         "total_found": len(results),
-        "note":        "Add NEWS_API_KEY in Railway variables for live article results",
     }
