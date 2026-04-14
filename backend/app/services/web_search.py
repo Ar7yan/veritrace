@@ -1,52 +1,44 @@
+import os
 import httpx
+from dotenv import load_dotenv
 from app.utils.text_cleaner import extract_query
+
+load_dotenv()
+
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
 async def search_propagation(text: str) -> dict:
     query = extract_query(text)
 
+    if not NEWS_API_KEY:
+        return {"query": query, "results": [], "total_found": 0}
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://api.duckduckgo.com/",
+                "https://newsapi.org/v2/everything",
                 params={
                     "q": query,
-                    "format": "json",
-                    "no_redirect": "1",
-                    "no_html": "1",
-                    "skip_disambig": "1",
+                    "apiKey": NEWS_API_KEY,
+                    "pageSize": 8,
+                    "sortBy": "relevancy",
+                    "language": "en",
                 },
                 timeout=15,
-                headers={"User-Agent": "Veritrace/2.0"},
             )
             data = response.json()
 
         results = []
-
-        # RelatedTopics give real links
-        for item in data.get("RelatedTopics", []):
-            if isinstance(item, dict) and item.get("FirstURL") and item.get("Text"):
-                url = item["FirstURL"]
-                source = url.split("/")[2].replace("www.", "") if "//" in url else "duckduckgo.com"
-                results.append({
-                    "title":    item.get("Text", "")[:80],
-                    "link":     url,
-                    "snippet":  item.get("Text", "")[:300],
-                    "source":   source,
-                    "position": len(results) + 1,
-                    "date":     "Recent",
-                })
-            if len(results) >= 8:
-                break
-
-        # fallback: use Abstract if no RelatedTopics
-        if not results and data.get("AbstractURL"):
+        for item in data.get("articles", []):
+            url = item.get("url", "")
+            source = item.get("source", {}).get("name", url.split("/")[2].replace("www.", "") if url else "")
             results.append({
-                "title":    data.get("Heading", query),
-                "link":     data.get("AbstractURL", ""),
-                "snippet":  data.get("Abstract", "")[:300],
-                "source":   data.get("AbstractSource", ""),
-                "position": 1,
-                "date":     "Recent",
+                "title":    item.get("title", "")[:120],
+                "link":     url,
+                "snippet":  item.get("description", "") or item.get("content", "")[:300],
+                "source":   source,
+                "position": len(results) + 1,
+                "date":     (item.get("publishedAt", "") or "")[:10],
             })
 
         return {
