@@ -1,52 +1,60 @@
-import os
 import httpx
-from dotenv import load_dotenv
 from app.utils.text_cleaner import extract_query
-
-load_dotenv()
-
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 async def search_propagation(text: str) -> dict:
     query = extract_query(text)
 
-    if not TAVILY_API_KEY or TAVILY_API_KEY == "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":
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.duckduckgo.com/",
+                params={
+                    "q": query,
+                    "format": "json",
+                    "no_redirect": "1",
+                    "no_html": "1",
+                    "skip_disambig": "1",
+                },
+                timeout=15,
+                headers={"User-Agent": "Veritrace/2.0"},
+            )
+            data = response.json()
+
+        results = []
+
+        # RelatedTopics give real links
+        for item in data.get("RelatedTopics", []):
+            if isinstance(item, dict) and item.get("FirstURL") and item.get("Text"):
+                url = item["FirstURL"]
+                source = url.split("/")[2].replace("www.", "") if "//" in url else "duckduckgo.com"
+                results.append({
+                    "title":    item.get("Text", "")[:80],
+                    "link":     url,
+                    "snippet":  item.get("Text", "")[:300],
+                    "source":   source,
+                    "position": len(results) + 1,
+                    "date":     "Recent",
+                })
+            if len(results) >= 8:
+                break
+
+        # fallback: use Abstract if no RelatedTopics
+        if not results and data.get("AbstractURL"):
+            results.append({
+                "title":    data.get("Heading", query),
+                "link":     data.get("AbstractURL", ""),
+                "snippet":  data.get("Abstract", "")[:300],
+                "source":   data.get("AbstractSource", ""),
+                "position": 1,
+                "date":     "Recent",
+            })
+
         return {
-            "query": query,
-            "results": [],
-            "total_found": 0,
-            "note": "No Tavily API key set",
+            "query":       query,
+            "results":     results,
+            "total_found": len(results),
         }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.tavily.com/search",
-            json={
-                "api_key": TAVILY_API_KEY,
-                "query": query,
-                "search_depth": "basic",
-                "max_results": 8,
-                "include_answer": False,
-            },
-            timeout=20,
-        )
-        data = response.json()
-
-    results = []
-    for item in data.get("results", []):
-        url = item.get("url", "")
-        source = url.split("/")[2].replace("www.", "") if url else ""
-        results.append({
-            "title":    item.get("title", ""),
-            "link":     url,
-            "snippet":  item.get("content", "")[:300],
-            "source":   source,
-            "position": len(results) + 1,
-            "date":     item.get("published_date", "Unknown"),
-        })
-
-    return {
-        "query":       query,
-        "results":     results,
-        "total_found": len(results),
-    }
+    except Exception as e:
+        print(f"[Veritrace] Search error: {e}")
+        return {"query": query, "results": [], "total_found": 0}
