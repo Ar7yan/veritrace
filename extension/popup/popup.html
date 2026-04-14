@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Veritrace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css"/>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
+        <rect width="36" height="36" rx="9" fill="rgba(232,201,126,0.1)" stroke="rgba(232,201,126,0.25)" stroke-width="1"/>
+        <circle cx="18" cy="18" r="5" stroke="#e8c97e" stroke-width="1.5" fill="none"/>
+        <path d="M18 8v3M18 25v3M8 18h3M25 18h3" stroke="#e8c97e" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="logo-name">VERITRACE</div>
+        <div class="logo-sub">AI INTELLIGENCE</div>
+      </div>
+    </div>
+    <div class="live-pill">
+      <span class="dot"></span>LIVE
+    </div>
+  </header>
+
+  <div id="view-input">
+    <div class="section-label">Content to Analyze</div>
+    <textarea id="input-text" placeholder="Paste text here, or select text on any webpage and click the floating Veritrace button..."></textarea>
+    <div class="char-count"><span id="char-count">0</span> characters · min 30</div>
+    <button id="btn-analyze" class="btn-primary" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      Analyze Content
+    </button>
+    <button id="btn-open-app" class="btn-secondary">Open Full App ↗</button>
+  </div>
+
+  <div id="view-loading" class="hidden">
+    <div style="text-align:center;padding:32px 18px">
+      <svg class="spin" width="32" height="32" viewBox="0 0 24 24" fill="none" style="margin-bottom:12px">
+        <circle cx="12" cy="12" r="10" stroke="rgba(232,201,126,0.2)" stroke-width="2"/>
+        <path d="M12 2a10 10 0 0110 10" stroke="#e8c97e" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <p class="loading-title">Analyzing content...</p>
+      <div class="loading-steps">
+        <div class="step" id="step-1">◎ AI Detection</div>
+        <div class="step" id="step-2">◎ Fake News Check</div>
+        <div class="step" id="step-3">◎ Web Propagation</div>
+        <div class="step" id="step-4">◎ Similarity Score</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-results" class="hidden">
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-label">AI Score</div>
+        <div class="stat-value" id="stat-ai">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Fake News</div>
+        <div class="stat-value" id="stat-fake">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Sources</div>
+        <div class="stat-value" id="stat-sources">—</div>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <div class="card-header">
+        <span class="card-label">AI Detection</span>
+        <span class="badge" id="badge-ai">—</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">AI Generated</span>
+        <span class="bar-pct" id="pct-ai" style="color:var(--rose)">0%</span>
+      </div>
+      <div class="track"><div class="fill fill-rose" id="bar-ai"></div></div>
+      <div class="bar-row" style="margin-top:10px">
+        <span class="bar-label">Human Written</span>
+        <span class="bar-pct" id="pct-human" style="color:var(--emerald)">0%</span>
+      </div>
+      <div class="track"><div class="fill fill-emerald" id="bar-human"></div></div>
+    </div>
+
+    <div class="result-card">
+      <div class="card-header">
+        <span class="card-label">Fake News Detector</span>
+        <span class="badge" id="badge-fake">—</span>
+      </div>
+      <div class="verdict-row" id="verdict-row">
+        <span class="verdict-icon" id="verdict-icon">?</span>
+        <div>
+          <div class="verdict-label" id="verdict-label">—</div>
+          <div class="verdict-score" id="verdict-score">Score: —</div>
+        </div>
+      </div>
+      <div id="fake-reasons"></div>
+    </div>
+
+    <div class="result-card">
+      <div class="card-header">
+        <span class="card-label">Top Web Matches</span>
+        <span class="badge" id="badge-sources" style="background:rgba(126,184,245,0.1);color:#7eb8f5;border:1px solid rgba(126,184,245,0.25)">0 found</span>
+      </div>
+      <div id="matches-list"></div>
+    </div>
+
+    <div class="actions-row">
+      <button id="btn-reset" class="btn-secondary" style="flex:1">← New</button>
+      <button id="btn-open-full" class="btn-primary" style="flex:2">View Full Report ↗</button>
+    </div>
+  </div>
+
+  <div id="view-error" class="hidden">
+    <div style="text-align:center;padding:32px 18px">
+      <div style="font-size:28px;color:var(--rose);margin-bottom:8px">✕</div>
+      <p style="font-family:var(--ff-d);font-size:16px;font-weight:700;color:var(--text1);margin-bottom:8px">Backend Offline</p>
+      <p style="font-family:var(--ff-b);font-size:12px;color:var(--text2);line-height:1.6">Could not reach the Veritrace API. Please try again.</p>
+      <button id="btn-retry" class="btn-primary" style="margin-top:16px">Retry</button>
+    </div>
+  </div>
+
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
